@@ -75,13 +75,11 @@ function createStaffPanelEmbed(staffMember, ratingData) {
     return new EmbedBuilder()
         .setColor(0x5865F2)
         .setAuthor({ name: staffMember.displayName, iconURL: staffMember.user.displayAvatarURL() })
-        .setThumbnail(staffMember.user.displayAvatarURL())
         .setTitle('Painel de Avaliação')
         .addFields(
             { name: 'Avaliação Média', value: `${starString}\n**${notaString}**`, inline: true },
             { name: 'Total de Avaliações', value: `🗳️ **${count}**`, inline: true }
         )
-        .setFooter({ text: 'Sistema de Avaliação • Atualizado em', iconURL: staffMember.user.displayAvatarURL() })
         .setTimestamp();
 }
 
