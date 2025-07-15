@@ -20,7 +20,7 @@ const path = require('path');
 const STAFF_ROLE_ID = '1046404063673192546';
 const ADMIN_ROLE_ID = '1046404063522197521';
 const PANEL_CHANNEL_ID = '1385643880141029376';
-const AUDIT_CHANNEL_ID = '1385646585630953623';
+const AUDIT_CHANNEL_ID = '1392299124371751075';
 const FORBIDDEN_ROLE_ID = '1046404063673192546';
 
 // --- CONFIGURAÇÃO DE HIERARQUIA ---
@@ -92,10 +92,33 @@ client.on(Events.MessageCreate, async message => {
         if (!message.member.roles.cache.has(ADMIN_ROLE_ID)) return message.reply('❌ Você não tem permissão.');
         const targetChannel = await client.channels.fetch(PANEL_CHANNEL_ID).catch(() => null);
         if (!targetChannel) return message.reply('❌ Canal do painel não encontrado.');
-        const panelEmbed = new EmbedBuilder().setColor(0x5865F2).setTitle('🌟 Painel de Avaliação da Equipe').setDescription('Clique no botão abaixo para avaliar um membro da nossa equipe.');
-        const panelButton = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('start_evaluation').setLabel('Avaliar um Atendimento').setStyle(ButtonStyle.Success).setEmoji('⭐'));
-        await targetChannel.send({ embeds: [panelEmbed], components: [panelButton] });
-        return message.reply(`✅ Painel de avaliação principal criado em <#${PANEL_CHANNEL_ID}>.`);
+        await targetChannel.bulkDelete(100, true).catch(() => {}); // Limpa o canal (opcional)
+        await message.reply('🔄 Criando painéis individuais para cada staff...');
+        await message.guild.members.fetch();
+        let staffMembers = message.guild.members.cache.filter(member => member.roles.cache.has(STAFF_ROLE_ID) && !member.user.bot);
+        let created = 0;
+        for (const staffMember of staffMembers.values()) {
+            const staffId = staffMember.id;
+            if (!votes.has(staffId)) {
+                votes.set(staffId, { total: 0, count: 0, panelMessageId: null });
+            }
+            const ratingData = votes.get(staffId);
+            const panelEmbed = createStaffPanelEmbed(staffMember, ratingData);
+            const row = new ActionRowBuilder();
+            for (let i = 1; i <= 5; i++) {
+                row.addComponents(new ButtonBuilder().setCustomId(`rate_${staffId}_${i}`).setLabel('⭐'.repeat(i)).setStyle(ButtonStyle.Primary));
+            }
+            try {
+                const newPanel = await targetChannel.send({ embeds: [panelEmbed], components: [row] });
+                ratingData.panelMessageId = newPanel.id;
+                created++;
+            } catch (error) {
+                console.error(`Falha ao criar painel para ${staffMember.displayName}:`, error);
+            }
+        }
+        saveVotes();
+        await message.reply(`✅ ${created} painéis individuais criados!`);
+        return;
     }
 
     if (message.content === '!gerenciar-paineis-staff') {
@@ -144,104 +167,23 @@ client.on(Events.MessageCreate, async message => {
 
 // --- GERENCIADOR DE INTERAÇÕES (AVALIAÇÕES) ---
 client.on(Events.InteractionCreate, async interaction => {
-    // Lógica para o botão inicial de avaliação e para os botões de paginação
-    if (interaction.isButton() && (interaction.customId === 'start_evaluation' || interaction.customId.startsWith('eval_page_'))) {
-        const guild = interaction.guild;
-        await guild.members.fetch();
-
-        const staffMembers = guild.members.cache.filter(member => member.roles.cache.has(STAFF_ROLE_ID) && !member.user.bot);
-        if (staffMembers.size === 0) {
-            return interaction.reply({ content: 'Não encontrei nenhum membro da equipe para avaliar no momento.', flags: MessageFlags.Ephemeral });
-        }
-
-        const staffArray = Array.from(staffMembers.values()).sort((a, b) => getMemberHierarchyLevel(a) - getMemberHierarchyLevel(b));
-        const itemsPerPage = 25;
-        let currentPage = 0;
-
-        // Extrai a página do customId do botão, se for um botão de paginação
-        if (interaction.customId.startsWith('eval_page_')) {
-            currentPage = parseInt(interaction.customId.split('_')[2], 10);
-        }
-
-        const totalPages = Math.ceil(staffArray.length / itemsPerPage);
-        const startIndex = currentPage * itemsPerPage;
-        const endIndex = startIndex + itemsPerPage;
-        const staffOnPage = staffArray.slice(startIndex, endIndex);
-
-        const options = staffOnPage.map(member => {
-            const ratingData = votes.get(member.id);
-            let ratingDescription = 'Sem avaliações';
-            if (ratingData && ratingData.count > 0) {
-                const average = (ratingData.total / ratingData.count).toFixed(2);
-                const count = ratingData.count;
-                const plural = count === 1 ? 'avaliação' : 'avaliações';
-                ratingDescription = `⭐ ${average} (${count} ${plural})`;
-            }
-            return { label: member.displayName, description: ratingDescription, value: member.id };
-        });
-
-        const selectMenu = new StringSelectMenuBuilder()
-            .setCustomId('select_staff_to_rate')
-            .setPlaceholder(`Selecione o staff (Página ${currentPage + 1}/${totalPages})`)
-            .addOptions(options);
-
-        const rowMenu = new ActionRowBuilder().addComponents(selectMenu);
-        const components = [rowMenu];
-
-        // Adiciona botões de navegação se houver mais de uma página
-        if (totalPages > 1) {
-            const rowButtons = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`eval_page_${currentPage - 1}`)
-                    .setLabel('Anterior')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setDisabled(currentPage === 0),
-                new ButtonBuilder()
-                    .setCustomId(`eval_page_${currentPage + 1}`)
-                    .setLabel('Próximo')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setDisabled(currentPage >= totalPages - 1)
-            );
-            components.push(rowButtons);
-        }
-
-        const responsePayload = {
-            content: 'Por favor, selecione abaixo o membro da equipe que você deseja avaliar:',
-            components: components,
-            flags: MessageFlags.Ephemeral
-        };
-        
-        if (interaction.customId.startsWith('eval_page_')) {
-             await interaction.update(responsePayload);
-        } else {
-             await interaction.reply(responsePayload);
-        }
-    }
-
-    if (interaction.isStringSelectMenu() && interaction.customId === 'select_staff_to_rate') {
-        const staffId = interaction.values[0];
-        const ratingData = votes.get(staffId);
-        const average = ratingData && ratingData.count > 0 ? (ratingData.total / ratingData.count).toFixed(2) : 'sem avaliações';
-        const count = ratingData?.count || 0;
-        const row = new ActionRowBuilder();
-        for (let i = 1; i <= 5; i++) { row.addComponents(new ButtonBuilder().setCustomId(`rate_${staffId}_${i}`).setLabel('⭐'.repeat(i)).setStyle(ButtonStyle.Primary)); }
-        await interaction.update({ content: `Como foi seu atendimento com <@${staffId}>?\nEle(a) possui **${average}** estrelas com base em **${count}** avaliações.`, components: [row] });
-    }
-
+    // Agora só lida com botões de avaliação direta
     if (interaction.isButton() && interaction.customId.startsWith('rate_')) {
-        if (interaction.member.roles.cache.has(FORBIDDEN_ROLE_ID)) { return interaction.update({ content: '❌ Você não tem permissão para avaliar.', components: [] }); }
+        if (interaction.member.roles.cache.has(FORBIDDEN_ROLE_ID)) { return interaction.reply({ content: '❌ Você não tem permissão para avaliar.', ephemeral: true }); }
         const [, staffId, rateStr] = interaction.customId.split('_');
         const key = `${interaction.user.id}_${staffId}`;
         const now = Date.now();
         if (userCooldown.has(key) && (now - userCooldown.get(key) < COOLDOWN)) {
             const remainingTime = COOLDOWN - (now - userCooldown.get(key));
             const remainingHours = (remainingTime / (1000 * 60 * 60)).toFixed(1);
-            return interaction.update({ content: `Você só pode avaliar este membro a cada 6 horas. Aguarde ${remainingHours} horas.`, components: [] });
+            return interaction.reply({ content: `Você só pode avaliar este membro a cada 6 horas. Aguarde ${remainingHours} horas.`, ephemeral: true });
         }
-        const selectionRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`openmodal_ticket_${staffId}_${rateStr}`).setLabel('Atendimento via Ticket').setStyle(ButtonStyle.Secondary).setEmoji('🎫'), new ButtonBuilder().setCustomId(`openmodal_call_${staffId}_${rateStr}`).setLabel('Atendimento via Call').setStyle(ButtonStyle.Secondary).setEmoji('📞'));
-        await interaction.update({ content: '**Qual foi o tipo de atendimento realizado?**', components: [selectionRow], });
+        const selectionRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`openmodal_ticket_${staffId}_${rateStr}`).setLabel('Atendimento via Ticket').setStyle(ButtonStyle.Secondary).setEmoji('🎫'),
+            new ButtonBuilder().setCustomId(`openmodal_call_${staffId}_${rateStr}`).setLabel('Atendimento via Call').setStyle(ButtonStyle.Secondary).setEmoji('📞')
+        );
+        await interaction.reply({ content: '**Qual foi o tipo de atendimento realizado?**', components: [selectionRow], ephemeral: true });
     }
-
     if (interaction.isButton() && interaction.customId.startsWith('openmodal_')) {
         const [, type, staffId, rateStr] = interaction.customId.split('_');
         const modal = new ModalBuilder().setCustomId(`modal_${type}_${staffId}_${rateStr}`).setTitle('Justificativa da Avaliação');
@@ -249,7 +191,6 @@ client.on(Events.InteractionCreate, async interaction => {
         modal.addComponents(new ActionRowBuilder().addComponents(justificativaInput));
         await interaction.showModal(modal);
     }
-
     if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_')) {
         const [, type, staffId, rateStr] = interaction.customId.split('_');
         const rate = parseInt(rateStr, 10);
@@ -264,7 +205,9 @@ client.on(Events.InteractionCreate, async interaction => {
             const auditChannel = await client.channels.fetch(AUDIT_CHANNEL_ID);
             if (auditChannel && auditChannel.isTextBased()) {
                 const serviceTypeText = type === 'ticket' ? 'Atendimento via Ticket' : 'Atendimento via Call Suporte';
-                const auditEmbed = new EmbedBuilder().setColor(0x3498DB).setTitle('📝 Nova Avaliação Recebida').addFields({ name: '👤 Avaliador', value: `<@${interaction.user.id}> (ID: ${interaction.user.id})`, inline: false }, { name: '👥 Staff Avaliado', value: `<@${staffId}> (ID: ${staffId})`, inline: false }, { name: '⭐ Nota', value: '⭐'.repeat(rate) + ` (${rate} estrelas)`, inline: false }, { name: '🔧 Tipo de Atendimento', value: serviceTypeText, inline: false }, { name: '💬 Justificativa', value: `\`\`\`${justificativa}\`\`\``, inline: false }).setTimestamp().setFooter({ text: 'Sistema de Avaliação', iconURL: client.user.displayAvatarURL() });
+                const auditEmbed = new EmbedBuilder().setColor(0x3498DB).setTitle('📝 Nova Avaliação Recebida').addFields({ name: '👤 Avaliador', value: `<@${interaction.user.id}> (ID: ${interaction.user.id})`, inline: false }, { name: '👥 Staff Avaliado', value: `<@${staffId}> (ID: ${staffId})`, inline: false }, { name: '⭐ Nota', value: '⭐'.repeat(rate) + ` (${rate} estrelas)`, inline: false }, { name: '🔧 Tipo de Atendimento', value: serviceTypeText, inline: false }, { name: '💬 Justificativa', value: `
+${justificativa}
+`, inline: false }).setTimestamp().setFooter({ text: 'Sistema de Avaliação', iconURL: client.user.displayAvatarURL() });
                 await auditChannel.send({ embeds: [auditEmbed] });
             }
         } catch (error) { console.error('Erro ao enviar a mensagem de auditoria:', error); }
@@ -277,7 +220,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 await panelToUpdate.edit({ embeds: [updatedEmbed] });
             } catch (error) { console.error(`Falha ao atualizar painel individual para ${staffId} em tempo real:`, error); }
         }
-        await interaction.reply({ content: '✅ Sua avaliação foi enviada com sucesso!', flags: [MessageFlags.Ephemeral] });
+        await interaction.reply({ content: '✅ Sua avaliação foi enviada com sucesso!', ephemeral: true });
     }
 });
 
