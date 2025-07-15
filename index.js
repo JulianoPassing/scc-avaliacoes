@@ -110,7 +110,11 @@ client.on(Events.MessageCreate, async message => {
             const panelEmbed = createStaffPanelEmbed(staffMember, ratingData);
             const row = new ActionRowBuilder();
             for (let i = 1; i <= 5; i++) {
-                row.addComponents(new ButtonBuilder().setCustomId(`rate_${staffId}_${i}`).setLabel('⭐'.repeat(i)).setStyle(ButtonStyle.Primary));
+                let style = ButtonStyle.Secondary;
+                if (i === 2) style = ButtonStyle.Primary;
+                else if (i === 3) style = ButtonStyle.Success;
+                else if (i >= 4) style = ButtonStyle.Danger;
+                row.addComponents(new ButtonBuilder().setCustomId(`rate_${staffId}_${i}`).setLabel('⭐'.repeat(i)).setStyle(style));
             }
             try {
                 const newPanel = await targetChannel.send({ embeds: [panelEmbed], components: [row] });
