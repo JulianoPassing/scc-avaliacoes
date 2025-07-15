@@ -225,20 +225,7 @@ ${justificativa}
 });
 
 
-// =======================================================
-// NOVO CÓDIGO DO SERVIDOR WEB (UPTIMEROBOT)
-// =======================================================
-const app = express();
-const port = 3000;
-
-app.get('/', (req, res) => {
-  res.send('Bot de avaliação está online! Ping recebido com sucesso.');
-});
-
-app.listen(port, () => {
-  console.log(`[INFO] Servidor web de monitoramento iniciado na porta ${port}.`);
-});
-// =======================================================
+// Removido o bloco do servidor web Express/UptimeRobot
 
 
 // Esta é a última linha do arquivo
