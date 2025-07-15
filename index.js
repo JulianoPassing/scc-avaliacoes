@@ -182,22 +182,35 @@ client.on(Events.InteractionCreate, async interaction => {
             const remainingHours = (remainingTime / (1000 * 60 * 60)).toFixed(1);
             return interaction.reply({ content: `Você só pode avaliar este membro a cada 6 horas. Aguarde ${remainingHours} horas.`, ephemeral: true });
         }
-        const selectionRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`openmodal_ticket_${staffId}_${rateStr}`).setLabel('Atendimento via Ticket').setStyle(ButtonStyle.Secondary).setEmoji('🎫'),
-            new ButtonBuilder().setCustomId(`openmodal_call_${staffId}_${rateStr}`).setLabel('Atendimento via Call').setStyle(ButtonStyle.Secondary).setEmoji('📞')
+        // Modal com seleção de tipo de atendimento e justificativa
+        const modal = new ModalBuilder().setCustomId(`modal_${staffId}_${rateStr}`).setTitle('Avaliação do Atendimento');
+        // Select para tipo de atendimento
+        const atendimentoSelect = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId('tipoAtendimento')
+                .setPlaceholder('Selecione o tipo de atendimento')
+                .addOptions([
+                    { label: 'Atendimento via Ticket', value: 'ticket', emoji: '🎫' },
+                    { label: 'Atendimento via Call', value: 'call', emoji: '📞' }
+                ])
         );
-        await interaction.reply({ content: '**Qual foi o tipo de atendimento realizado?**', components: [selectionRow], ephemeral: true });
-    }
-    if (interaction.isButton() && interaction.customId.startsWith('openmodal_')) {
-        const [, type, staffId, rateStr] = interaction.customId.split('_');
-        const modal = new ModalBuilder().setCustomId(`modal_${type}_${staffId}_${rateStr}`).setTitle('Justificativa da Avaliação');
-        const justificativaInput = new TextInputBuilder().setCustomId('justificativaInput').setLabel("Por que você deu essa nota?").setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Ex: Atendimento rápido e resolveu meu problema com eficiência.');
-        modal.addComponents(new ActionRowBuilder().addComponents(justificativaInput));
+        // Campo de justificativa
+        const justificativaInput = new TextInputBuilder()
+            .setCustomId('justificativaInput')
+            .setLabel('Por que você deu essa nota?')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true)
+            .setPlaceholder('Ex: Atendimento rápido e resolveu meu problema com eficiência.');
+        const justificativaRow = new ActionRowBuilder().addComponents(justificativaInput);
+        // Adiciona ambos ao modal
+        modal.addComponents(atendimentoSelect, justificativaRow);
         await interaction.showModal(modal);
     }
     if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_')) {
-        const [, type, staffId, rateStr] = interaction.customId.split('_');
+        const [, staffId, rateStr] = interaction.customId.split('_');
         const rate = parseInt(rateStr, 10);
+        // Recupera tipo de atendimento e justificativa
+        const tipoAtendimento = interaction.fields.getField('tipoAtendimento')?.value || 'ticket';
         const justificativa = interaction.fields.getTextInputValue('justificativaInput');
         if (!votes.has(staffId)) { votes.set(staffId, { total: 0, count: 0, panelMessageId: null }); }
         const ratingData = votes.get(staffId);
@@ -208,10 +221,8 @@ client.on(Events.InteractionCreate, async interaction => {
         try {
             const auditChannel = await client.channels.fetch(AUDIT_CHANNEL_ID);
             if (auditChannel && auditChannel.isTextBased()) {
-                const serviceTypeText = type === 'ticket' ? 'Atendimento via Ticket' : 'Atendimento via Call Suporte';
-                const auditEmbed = new EmbedBuilder().setColor(0x3498DB).setTitle('📝 Nova Avaliação Recebida').addFields({ name: '👤 Avaliador', value: `<@${interaction.user.id}> (ID: ${interaction.user.id})`, inline: false }, { name: '👥 Staff Avaliado', value: `<@${staffId}> (ID: ${staffId})`, inline: false }, { name: '⭐ Nota', value: '⭐'.repeat(rate) + ` (${rate} estrelas)`, inline: false }, { name: '🔧 Tipo de Atendimento', value: serviceTypeText, inline: false }, { name: '💬 Justificativa', value: `
-${justificativa}
-`, inline: false }).setTimestamp().setFooter({ text: 'Sistema de Avaliação', iconURL: client.user.displayAvatarURL() });
+                const serviceTypeText = tipoAtendimento === 'ticket' ? 'Atendimento via Ticket' : 'Atendimento via Call Suporte';
+                const auditEmbed = new EmbedBuilder().setColor(0x3498DB).setTitle('📝 Nova Avaliação Recebida').addFields({ name: '👤 Avaliador', value: `<@${interaction.user.id}> (ID: ${interaction.user.id})`, inline: false }, { name: '👥 Staff Avaliado', value: `<@${staffId}> (ID: ${staffId})`, inline: false }, { name: '⭐ Nota', value: '⭐'.repeat(rate) + ` (${rate} estrelas)`, inline: false }, { name: '🔧 Tipo de Atendimento', value: serviceTypeText, inline: false }, { name: '💬 Justificativa', value: `\n${justificativa}\n`, inline: false }).setTimestamp().setFooter({ text: 'Sistema de Avaliação', iconURL: client.user.displayAvatarURL() });
                 await auditChannel.send({ embeds: [auditEmbed] });
             }
         } catch (error) { console.error('Erro ao enviar a mensagem de auditoria:', error); }
