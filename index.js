@@ -182,45 +182,32 @@ client.on(Events.InteractionCreate, async interaction => {
             const remainingHours = (remainingTime / (1000 * 60 * 60)).toFixed(1);
             return interaction.reply({ content: `Você só pode avaliar este membro a cada 6 horas. Aguarde ${remainingHours} horas.`, ephemeral: true });
         }
-        // Modal para tipo de atendimento
-        const modal = new ModalBuilder().setCustomId(`modal_tipo_${staffId}_${rateStr}`).setTitle('Tipo de Atendimento');
+        // Modal com dois campos: tipo e justificativa
+        const modal = new ModalBuilder().setCustomId(`modal_avaliacao_${staffId}_${rateStr}`).setTitle('Avaliação do Atendimento');
         const tipoInput = new TextInputBuilder()
             .setCustomId('tipoAtendimentoInput')
             .setLabel('Tipo de atendimento (ticket ou call)')
             .setStyle(TextInputStyle.Short)
             .setRequired(true)
             .setPlaceholder('Digite: ticket ou call');
-        modal.addComponents(new ActionRowBuilder().addComponents(tipoInput));
-        await interaction.showModal(modal);
-    }
-    // Após o tipo, abre o modal de justificativa
-    if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_tipo_')) {
-        const [, , staffId, rateStr] = interaction.customId.split('_');
-        const tipoAtendimento = interaction.fields.getTextInputValue('tipoAtendimentoInput').toLowerCase();
-        // Salva temporariamente o tipo de atendimento para o usuário
-        if (!global.tempAval) global.tempAval = {};
-        global.tempAval[`${interaction.user.id}_${staffId}`] = { tipoAtendimento, rateStr };
-        // Modal para justificativa
-        const modal = new ModalBuilder().setCustomId(`modal_just_${staffId}`).setTitle('Justificativa da Avaliação');
         const justificativaInput = new TextInputBuilder()
             .setCustomId('justificativaInput')
             .setLabel('Por que você deu essa nota?')
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true)
             .setPlaceholder('Ex: Atendimento rápido e resolveu meu problema com eficiência.');
-        modal.addComponents(new ActionRowBuilder().addComponents(justificativaInput));
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(tipoInput),
+            new ActionRowBuilder().addComponents(justificativaInput)
+        );
         await interaction.showModal(modal);
     }
-    // Após justificativa, salva avaliação
-    if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_just_')) {
-        const [, , staffId] = interaction.customId.split('_');
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_avaliacao_')) {
+        const [, , staffId, rateStr] = interaction.customId.split('_');
         const key = `${interaction.user.id}_${staffId}`;
-        const temp = global.tempAval && global.tempAval[key];
-        if (!temp) return interaction.reply({ content: 'Erro interno: tipo de atendimento não encontrado.', ephemeral: true });
-        const rate = parseInt(temp.rateStr, 10);
-        const tipoAtendimento = temp.tipoAtendimento;
+        const rate = parseInt(rateStr, 10);
+        const tipoAtendimento = interaction.fields.getTextInputValue('tipoAtendimentoInput').toLowerCase();
         const justificativa = interaction.fields.getTextInputValue('justificativaInput');
-        delete global.tempAval[key];
         if (!votes.has(staffId)) { votes.set(staffId, { total: 0, count: 0, panelMessageId: null }); }
         const ratingData = votes.get(staffId);
         ratingData.total += rate;
