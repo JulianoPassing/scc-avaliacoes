@@ -88,11 +88,11 @@ client.once('ready', () => { console.log(`Bot online como ${client.user.tag}`); 
 client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
 
-    if (message.content === '!setup-painel-avaliacao') {
+    if (message.content === '!painel-avaliacao') {
         if (!message.member.roles.cache.has(ADMIN_ROLE_ID)) return message.reply('❌ Você não tem permissão.');
         const targetChannel = message.channel; // Agora usa o canal onde o comando foi enviado
         await targetChannel.bulkDelete(100, true).catch(() => {}); // Limpa o canal (opcional)
-        await message.reply('🔄 Criando painéis individuais para cada staff na ordem de hierarquia...');
+        await message.channel.send('🔄 Criando painéis individuais para cada staff na ordem de hierarquia...');
         await message.guild.members.fetch();
         let staffMembers = message.guild.members.cache.filter(member => member.roles.cache.has(STAFF_ROLE_ID) && !member.user.bot);
         // Ordena os membros pela hierarquia
@@ -119,7 +119,7 @@ client.on(Events.MessageCreate, async message => {
             }
         }
         saveVotes();
-        await message.reply(`✅ ${created} painéis individuais criados na ordem de hierarquia!`);
+        await message.channel.send(`✅ ${created} painéis individuais criados na ordem de hierarquia!`);
         return;
     }
 
