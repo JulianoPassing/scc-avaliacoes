@@ -104,7 +104,7 @@ client.on(Events.MessageCreate, async message => {
         for (const staffMember of staffArray) {
             const staffId = staffMember.id;
             if (!votes.has(staffId)) {
-                votes.set(staffId, { total: 0, count: 0, panelMessageId: null });
+                votes.set(staffId, { total: 0, count: 0, panelMessageId: null, panelChannelId: null });
             }
             const ratingData = votes.get(staffId);
             const panelEmbed = createStaffPanelEmbed(staffMember, ratingData);
@@ -115,6 +115,7 @@ client.on(Events.MessageCreate, async message => {
             try {
                 const newPanel = await targetChannel.send({ embeds: [panelEmbed], components: [row] });
                 ratingData.panelMessageId = newPanel.id;
+                ratingData.panelChannelId = targetChannel.id;
                 created++;
             } catch (error) {
                 console.error(`Falha ao criar painel para ${staffMember.displayName}:`, error);
@@ -208,7 +209,7 @@ client.on(Events.InteractionCreate, async interaction => {
         const rate = parseInt(rateStr, 10);
         const tipoAtendimento = interaction.fields.getTextInputValue('tipoAtendimentoInput').toLowerCase();
         const justificativa = interaction.fields.getTextInputValue('justificativaInput');
-        if (!votes.has(staffId)) { votes.set(staffId, { total: 0, count: 0, panelMessageId: null }); }
+        if (!votes.has(staffId)) { votes.set(staffId, { total: 0, count: 0, panelMessageId: null, panelChannelId: null }); }
         const ratingData = votes.get(staffId);
         ratingData.total += rate;
         ratingData.count += 1;
@@ -222,9 +223,9 @@ client.on(Events.InteractionCreate, async interaction => {
                 await auditChannel.send({ embeds: [auditEmbed] });
             }
         } catch (error) { console.error('Erro ao enviar a mensagem de auditoria:', error); }
-        if (ratingData.panelMessageId) {
+        if (ratingData.panelMessageId && ratingData.panelChannelId) {
             try {
-                const panelChannel = await client.channels.fetch(PANEL_CHANNEL_ID);
+                const panelChannel = await client.channels.fetch(ratingData.panelChannelId);
                 const panelToUpdate = await panelChannel.messages.fetch(ratingData.panelMessageId);
                 const staffMember = await interaction.guild.members.fetch(staffId);
                 const updatedEmbed = createStaffPanelEmbed(staffMember, ratingData);
