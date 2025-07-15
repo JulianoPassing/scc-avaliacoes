@@ -74,7 +74,7 @@ function createStaffPanelEmbed(staffMember, ratingData) {
     }
     return new EmbedBuilder()
         .setColor(0x5865F2)
-        .setAuthor({ name: `[${cargo}] ${staffMember.displayName}`, iconURL: staffMember.user.displayAvatarURL() })
+        .setAuthor({ name: staffMember.displayName, iconURL: staffMember.user.displayAvatarURL() })
         .setThumbnail(staffMember.user.displayAvatarURL())
         .setTitle('Painel de Avaliação')
         .addFields(
@@ -121,11 +121,7 @@ client.on(Events.MessageCreate, async message => {
             const panelEmbed = createStaffPanelEmbed(staffMember, ratingData);
             const row = new ActionRowBuilder();
             for (let i = 1; i <= 5; i++) {
-                let style = ButtonStyle.Secondary;
-                if (i === 2) style = ButtonStyle.Primary;
-                else if (i === 3) style = ButtonStyle.Success;
-                else if (i >= 4) style = ButtonStyle.Danger;
-                row.addComponents(new ButtonBuilder().setCustomId(`rate_${staffId}_${i}`).setLabel('⭐'.repeat(i)).setStyle(style));
+                row.addComponents(new ButtonBuilder().setCustomId(`rate_${staffId}_${i}`).setLabel('⭐'.repeat(i)).setStyle(ButtonStyle.Primary));
             }
             try {
                 const newPanel = await targetChannel.send({ embeds: [panelEmbed], components: [row] });
