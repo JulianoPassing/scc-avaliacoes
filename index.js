@@ -12,7 +12,6 @@ const {
     TextInputStyle,
     MessageFlags
 } = require('discord.js');
-const express = require('express');
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
@@ -284,7 +283,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
 
 // =======================================================
-// CÓDIGO DO SERVIDOR WEB (UPTIMEROBOT)
+// NOVO CÓDIGO DO SERVIDOR WEB (UPTIMEROBOT)
 // =======================================================
 const app = express();
 const port = 3000;
