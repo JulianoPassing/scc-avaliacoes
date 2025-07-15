@@ -54,23 +54,34 @@ function createStaffPanelEmbed(staffMember, ratingData) {
     let average = 0;
     let count = 0;
     let starString = 'Nenhuma avaliação ainda';
-
+    let notaString = '—';
     if (ratingData && ratingData.count > 0) {
         average = (ratingData.total / ratingData.count);
         count = ratingData.count;
         const fullStars = Math.floor(average);
         const halfStar = (average - fullStars) >= 0.5 ? 1 : 0;
         const emptyStars = 5 - fullStars - halfStar;
-        starString = '⭐'.repeat(fullStars) + '半'.repeat(halfStar) + '☆'.repeat(emptyStars) + ` (${average.toFixed(2)})`;
+        starString = '⭐'.repeat(fullStars) + (halfStar ? '✬' : '') + '☆'.repeat(emptyStars);
+        notaString = `${average.toFixed(2)} / 5.00`;
     }
-
+    // Descobre o cargo principal do staff pela hierarquia
+    let cargo = 'Staff';
+    for (let i = 0; i < ROLE_HIERARCHY.length; i++) {
+        if (staffMember.roles.cache.has(ROLE_HIERARCHY[i].id)) {
+            cargo = ROLE_HIERARCHY[i].name;
+            break;
+        }
+    }
     return new EmbedBuilder()
-        .setColor(0x3498DB)
-        .setAuthor({ name: staffMember.displayName, iconURL: staffMember.user.displayAvatarURL() })
+        .setColor(0x5865F2)
+        .setAuthor({ name: `[${cargo}] ${staffMember.displayName}`, iconURL: staffMember.user.displayAvatarURL() })
+        .setThumbnail(staffMember.user.displayAvatarURL())
+        .setTitle('Painel de Avaliação')
         .addFields(
-            { name: 'Avaliação Média', value: starString, inline: true },
-            { name: 'Total de Avaliações', value: `**${count}**`, inline: true }
+            { name: 'Avaliação Média', value: `${starString}\n**${notaString}**`, inline: true },
+            { name: 'Total de Avaliações', value: `🗳️ **${count}**`, inline: true }
         )
+        .setFooter({ text: 'Sistema de Avaliação • Atualizado em', iconURL: staffMember.user.displayAvatarURL() })
         .setTimestamp();
 }
 
