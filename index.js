@@ -90,14 +90,16 @@ client.on(Events.MessageCreate, async message => {
 
     if (message.content === '!setup-painel-avaliacao') {
         if (!message.member.roles.cache.has(ADMIN_ROLE_ID)) return message.reply('❌ Você não tem permissão.');
-        const targetChannel = await client.channels.fetch(PANEL_CHANNEL_ID).catch(() => null);
-        if (!targetChannel) return message.reply('❌ Canal do painel não encontrado.');
+        const targetChannel = message.channel; // Agora usa o canal onde o comando foi enviado
         await targetChannel.bulkDelete(100, true).catch(() => {}); // Limpa o canal (opcional)
-        await message.reply('🔄 Criando painéis individuais para cada staff...');
+        await message.reply('🔄 Criando painéis individuais para cada staff na ordem de hierarquia...');
         await message.guild.members.fetch();
         let staffMembers = message.guild.members.cache.filter(member => member.roles.cache.has(STAFF_ROLE_ID) && !member.user.bot);
+        // Ordena os membros pela hierarquia
+        let staffArray = Array.from(staffMembers.values());
+        staffArray.sort((a, b) => getMemberHierarchyLevel(a) - getMemberHierarchyLevel(b));
         let created = 0;
-        for (const staffMember of staffMembers.values()) {
+        for (const staffMember of staffArray) {
             const staffId = staffMember.id;
             if (!votes.has(staffId)) {
                 votes.set(staffId, { total: 0, count: 0, panelMessageId: null });
@@ -117,7 +119,7 @@ client.on(Events.MessageCreate, async message => {
             }
         }
         saveVotes();
-        await message.reply(`✅ ${created} painéis individuais criados!`);
+        await message.reply(`✅ ${created} painéis individuais criados na ordem de hierarquia!`);
         return;
     }
 
